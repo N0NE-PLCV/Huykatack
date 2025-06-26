@@ -16,35 +16,40 @@ from health_prompt_template import (
     get_ai3_doctor_reply_template,
     get_skin_image_summary_template,
 )
-from skin_model_predict import predict_skin_disease
 import warnings
 from PIL import Image
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# โหลด .env
+# Load environment variables
 load_dotenv()
 
+# TYPHOON API CONFIGURATION - REAL API KEY REQUIRED
 TYPHOON_API_KEY = os.getenv("TYPHOON_API_KEY")
 TYPHOON_API_URL = "https://api.opentyphoon.ai/v1"
 
+if not TYPHOON_API_KEY:
+    raise Exception("TYPHOON_API_KEY is required in environment variables")
+
+print(f"🌪️ Typhoon API configured with key: {TYPHOON_API_KEY[:10]}...")
+
+# Initialize OpenAI client for Typhoon
 client = OpenAI(
     api_key=TYPHOON_API_KEY,
     base_url=TYPHOON_API_URL
 )
 
+# Load symptom data
 SYMPTOM_CSV = "./data/full_onehot_disease.csv"
 df, known_symptoms, disease_col = load_symptom_data(SYMPTOM_CSV)
-known_diseases = list(df[disease_col].unique())  # สำหรับตรวจชื่อโรค
+known_diseases = list(df[disease_col].unique())
 
-# ===== Guardrails หลายไฟล์ สำหรับแต่ละ AI
+# Guardrails
 guard_ai1 = Guard.from_rail("guardrails_spec_ai1.rail")
 guard_ai2 = Guard.from_rail("guardrails_spec_ai2.rail")
 guard = Guard.from_rail("guardrails_spec.rail")
 
-# =========================
-# กลุ่มคำสนทนาทั่วไป
-# =========================
+# Conversation patterns
 THANK_WORDS = {"ขอบคุณ", "ขอบคุณค่ะ", "ขอบคุณครับ", "thank you", "ขอบใจ", "ซาบซึ้ง"}
 THANK_REPLIES = [
     "ยินดีค่ะ 😊 หากมีอะไรให้ช่วยเหลือเพิ่มเติม แจ้งได้เลยนะคะ",
@@ -73,44 +78,62 @@ def load_json_file(file_path):
         return json.load(file)
 
 def convert_json_to_str(json_data):
-    # ใช้ json.dumps() เพื่อแปลงข้อมูลทุกอย่างใน JSON เป็น string
     return json.dumps(json_data, ensure_ascii=False)
 
 def format_ai3_bullet(text):
+    """Format AI response with proper bullet points and spacing"""
     lines = text.split('\n')
     new_lines = []
     for i, line in enumerate(lines):
         if line.strip().startswith('•'):
             if i > 0 and lines[i-1].strip() != '':
-                new_lines.append('')  # เพิ่มบรรทัดว่างระหว่าง bullet
+                new_lines.append('')  # Add empty line before bullet
         new_lines.append(line)
     return '\n'.join(new_lines)
 
-# =========================
 def typhoon_wrapper(prompt, **kwargs):
     """
-    LLM Typhoon wrapper function for AI responses
+    REAL Typhoon LLM API wrapper - NO FALLBACKS
+    Uses actual TYPHOON_API_KEY from environment
     """
     model = kwargs.get("model", "typhoon-v2.1-12b-instruct")
     temperature = kwargs.get("temperature", 0.3)
     max_tokens = kwargs.get("max_new_tokens", 512)
     
-    print(f"🌪️ Calling Typhoon LLM with model: {model}")
+    print(f"🌪️ Calling REAL Typhoon LLM API...")
+    print(f"📝 Model: {model}")
+    print(f"🌡️ Temperature: {temperature}")
+    print(f"📏 Max tokens: {max_tokens}")
     print(f"📝 Prompt length: {len(prompt)} characters")
     
-    response = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "system", "content": "คุณเป็นผู้ช่วย AI สุขภาพเบื้องต้น พูดจาอ่อนโยน ให้ข้อมูลเหมือนผู้หญิงไทย สุภาพ เป็นมิตร ไม่พูด 'สวัสดี' ทุกครั้ง (พูดแค่ทักทายครั้งแรกเท่านั้น) และห้ามวินิจฉัยหรือสั่งยา ต้องแนะนำให้พบแพทย์เสมอ"},
-                  {"role": "user", "content": prompt}],
-        max_tokens=max_tokens,
-        temperature=temperature
-    )
-    
-    result = response.choices[0].message.content
-    print(f"✅ Typhoon LLM response generated successfully")
-    return result
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system", 
+                    "content": "คุณเป็นผู้ช่วย AI สุขภาพเบื้องต้น พูดจาอ่อนโยน ให้ข้อมูลเหมือนผู้หญิงไทย สุภาพ เป็นมิตร ไม่พูด 'สวัสดี' ทุกครั้ง (พูดแค่ทักทายครั้งแรกเท่านั้น) และห้ามวินิจฉัยหรือสั่งยา ต้องแนะนำให้พบแพทย์เสมอ"
+                },
+                {
+                    "role": "user", 
+                    "content": prompt
+                }
+            ],
+            max_tokens=max_tokens,
+            temperature=temperature
+        )
+        
+        result = response.choices[0].message.content
+        print(f"✅ Typhoon LLM response received successfully")
+        print(f"📊 Response length: {len(result)} characters")
+        
+        return result
+        
+    except Exception as e:
+        print(f"❌ REAL Typhoon API call failed: {e}")
+        raise Exception(f"Typhoon LLM API error: {e}")
 
-# ================= AI 3 CHAIN =================
+# AI Chain Functions
 def ai_chain_consistency(user_symptoms, predicted_diseases, llm_api, json_file):
     json_data = json_file
     disease_info = json_data
@@ -151,55 +174,56 @@ def ai_chain_doctor_reply(ai2_summary, ai2_recommendation, llm_api):
     response = llm_api(prompt, model="typhoon-v2.1-12b-instruct", temperature=0.2, max_new_tokens=512)
     return response
 
-# ================= SKIN DISEASE AI CHAIN WITH get_skin_image_summary_template =================
-def ai_chain_skin_summary(image_class, confidence, llm_api):
+def ai_chain_skin_doctor_reply(predicted_class, confidence, llm_api):
     """
-    สร้างสรุปและคำแนะนำเบื้องต้นสำหรับการวิเคราะห์ภาพผิวหนัง
-    ใช้ข้อมูลจาก real CNN model prediction
-    """
-    print(f"📋 Generating skin analysis summary for: {image_class} ({confidence:.1%})")
+    Generate AI doctor response for skin analysis using REAL CNN results
+    Uses get_skin_image_summary_template from health_prompt_template.py + REAL Typhoon API
     
-    if image_class == "Abnormal(Ulcer)":
-        ai2_summary = f"จากการวิเคราะห์ภาพด้วย CNN model พบลักษณะผิดปกติที่อาจเป็นแผลหรือรอยโรคผิวหนัง (ความมั่นใจจาก real CNN model: {confidence:.1%})"
+    Args:
+        predicted_class: Result from REAL CNN model (custom_cnn_dfu_model.h5)
+        confidence: Confidence from REAL CNN model
+        llm_api: REAL Typhoon LLM API function
+    
+    Returns:
+        str: AI doctor response in Thai
+    """
+    print(f"🩺 Generating AI doctor response using REAL CNN results...")
+    print(f"🧠 REAL CNN Input: {predicted_class} (confidence: {confidence:.1%})")
+    print(f"📝 Using get_skin_image_summary_template from health_prompt_template.py...")
+    
+    # Generate summary based on REAL CNN results
+    if predicted_class == "Abnormal(Ulcer)":
+        ai2_summary = f"จากการวิเคราะห์ภาพด้วย REAL CNN model (custom_cnn_dfu_model.h5) พบลักษณะผิดปกติที่อาจเป็นแผลหรือรอยโรคผิวหนัง (ความมั่นใจจาก REAL CNN: {confidence:.1%})"
         ai2_recommendation = "ควรปรึกษาแพทย์ผิวหนังหรือแพทย์เบาหวานเพื่อรับการตรวจและรักษาที่เหมาะสม เนื่องจากอาจเกี่ยวข้องกับภาวะแทรกซ้อนจากเบาหวาน"
     else:  # Normal(Healthy skin)
-        ai2_summary = f"จากการวิเคราะห์ภาพด้วย CNN model ผิวหนังดูปกติ (ความมั่นใจจาก real CNN model: {confidence:.1%})"
+        ai2_summary = f"จากการวิเคราะห์ภาพด้วย REAL CNN model (custom_cnn_dfu_model.h5) ผิวหนังดูปกติ (ความมั่นใจจาก REAL CNN: {confidence:.1%})"
         ai2_recommendation = "ควรดูแลรักษาความสะอาดและความชุ่มชื้นของผิวหนังต่อไป และตรวจสอบผิวหนังเป็นประจำ"
     
-    return ai2_summary, ai2_recommendation
-
-def ai_chain_skin_doctor_reply(image_class, confidence, llm_api):
-    """
-    สร้างคำตอบจากหมอสำหรับการวิเคราะห์ภาพผิวหนัง
-    ใช้ get_skin_image_summary_template จาก health_prompt_template.py
-    """
-    print(f"🩺 Generating AI doctor reply using get_skin_image_summary_template...")
-    print(f"📊 Input: {image_class} with confidence {confidence:.1%}")
-    
-    # สร้างสรุปจาก real CNN model results
-    ai2_summary, ai2_recommendation = ai_chain_skin_summary(image_class, confidence, llm_api)
-    
-    # ใช้ get_skin_image_summary_template จาก health_prompt_template.py
-    print("📝 Using get_skin_image_summary_template from health_prompt_template.py...")
+    # Use get_skin_image_summary_template from health_prompt_template.py
+    print("📋 Loading get_skin_image_summary_template...")
     prompt_template = get_skin_image_summary_template()
     
-    # สร้าง prompt ด้วย template
+    # Create prompt with REAL CNN data
     prompt = prompt_template.format(
-        image_class=f"{image_class} (ความมั่นใจจาก real CNN model: {confidence:.1%})",
+        image_class=f"{predicted_class} (ความมั่นใจจาก REAL CNN model custom_cnn_dfu_model.h5: {confidence:.1%})",
         ai2_summary=ai2_summary,
         ai2_recommendation=ai2_recommendation
     )
     
-    print(f"🌪️ Calling Typhoon LLM with get_skin_image_summary_template prompt...")
+    print(f"🌪️ Calling REAL Typhoon LLM with get_skin_image_summary_template...")
+    print(f"📝 Prompt preview: {prompt[:200]}...")
     
-    # เรียก Typhoon LLM
+    # Call REAL Typhoon LLM API
     response = llm_api(prompt, model="typhoon-v2.1-12b-instruct", temperature=0.2, max_new_tokens=512)
     
-    print("✅ AI doctor response generated using get_skin_image_summary_template")
+    print("✅ AI doctor response generated successfully using:")
+    print("   🧠 REAL CNN model: custom_cnn_dfu_model.h5")
+    print("   📝 Template: get_skin_image_summary_template")
+    print("   🌪️ LLM: REAL Typhoon API")
+    
     return response
 
-# =========================
-# ฟังก์ชันการถามบอท
+# Main chat function
 def ask_bot_streamlit(user_message, n_results=1, greeted=False):
     msg_lower = user_message.lower().strip()
 
@@ -256,8 +280,7 @@ def ask_bot_streamlit(user_message, n_results=1, greeted=False):
 
     return ai3_reply.strip()
 
-# ------------------- Streamlit UI -------------------
-
+# Streamlit UI
 st.set_page_config(page_title="AI Health Symptom Advisor", page_icon="💊")
 
 st.markdown("""
@@ -303,20 +326,19 @@ st.markdown(
     "**หมายเหตุ:** ข้อมูลนี้เป็นเพียงคำแนะนำเบื้องต้น หากอาการไม่ดีขึ้นควรปรึกษาแพทย์"
 )
 
+# Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "greeted" not in st.session_state:
     st.session_state.greeted = False
 if "pending_ai" not in st.session_state:
     st.session_state.pending_ai = False
-
-# **เพิ่มตัวแปรเก็บผลวิเคราะห์ภาพ**
 if "ai3_skin_reply" not in st.session_state:
     st.session_state.ai3_skin_reply = ""
 if "skin_analysis_result" not in st.session_state:
     st.session_state.skin_analysis_result = None
 
-# ----------------- Messenger Bubble Layout ----------------
+# Display messages
 st.markdown('<div class="messenger-bg">', unsafe_allow_html=True)
 st.markdown('<div class="messenger-container">', unsafe_allow_html=True)
 
@@ -339,12 +361,12 @@ if st.session_state.pending_ai:
         '</div>', unsafe_allow_html=True
     )
 
-st.markdown('</div>', unsafe_allow_html=True) # .messenger-container
-st.markdown('</div>', unsafe_allow_html=True) # .messenger-bg
+st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
-# --- เพิ่ม UI อัปโหลดรูปภาพสำหรับวิเคราะห์ด้วย REAL CNN MODEL ---
-st.sidebar.title("🔬 วิเคราะห์โรคผิวหนังจากรูปภาพ")
-st.sidebar.markdown("อัปโหลดภาพผิวหนังเพื่อให้ AI วิเคราะห์ด้วย **REAL CNN Model** (custom_cnn_dfu_model.h5)")
+# Sidebar for REAL CNN Model Analysis
+st.sidebar.title("🔬 วิเคราะห์โรคผิวหนังด้วย REAL CNN Model")
+st.sidebar.markdown("อัปโหลดภาพผิวหนังเพื่อให้ AI วิเคราะห์ด้วย **REAL CNN Model** (custom_cnn_dfu_model.h5) + **REAL Typhoon API**")
 
 uploaded_file = st.sidebar.file_uploader("เลือกรูปภาพผิวหนัง", type=["png", "jpg", "jpeg"])
 
@@ -352,47 +374,54 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file).convert("RGB")
     st.sidebar.image(image, caption="ภาพที่อัปโหลด", use_container_width=True)
 
-    if st.sidebar.button("🔍 วิเคราะห์ภาพด้วย REAL CNN Model", type="primary"):
-        with st.spinner("กำลังวิเคราะห์ภาพด้วย REAL CNN Model..."):
+    if st.sidebar.button("🔍 วิเคราะห์ด้วย REAL CNN + Typhoon", type="primary"):
+        with st.spinner("กำลังวิเคราะห์ด้วย REAL CNN Model + Typhoon API..."):
             try:
-                print("🚀 Starting analysis with REAL CNN Model...")
+                print("🚀 Starting REAL CNN + Typhoon analysis...")
                 
-                # เรียกใช้ predict_skin_disease ที่ใช้ REAL CNN model
+                # Import and use REAL predict_skin_disease function
+                from skin_model_predict import predict_skin_disease
+                
+                # Get REAL CNN prediction
                 predicted_class, confidence = predict_skin_disease(image)
                 
                 print(f"🎯 REAL CNN Result: {predicted_class} ({confidence:.1%})")
                 
-                # สร้างคำตอบจาก AI Doctor ด้วย get_skin_image_summary_template
-                print("🤖 Generating AI doctor response with get_skin_image_summary_template...")
+                # Generate AI doctor response using REAL Typhoon API
+                print("🤖 Generating AI doctor response with REAL Typhoon API...")
                 skin_ai3_reply = ai_chain_skin_doctor_reply(predicted_class, confidence, typhoon_wrapper)
                 skin_ai3_reply = format_ai3_bullet(skin_ai3_reply)
                 
-                # เก็บผลลัพธ์ใน session state
+                # Store results
                 st.session_state.ai3_skin_reply = skin_ai3_reply
                 st.session_state.skin_analysis_result = {
                     "predicted_class": predicted_class,
                     "confidence": confidence,
                     "reply": skin_ai3_reply,
                     "model_used": "REAL CNN Model (custom_cnn_dfu_model.h5)",
-                    "template_used": "get_skin_image_summary_template"
+                    "api_used": "REAL Typhoon API",
+                    "template_used": "get_skin_image_summary_template",
+                    "pipeline": "predict_skin_disease → ai_chain_skin_doctor_reply → format_ai3_bullet"
                 }
                 
-                st.sidebar.success("✅ วิเคราะห์เสร็จแล้วด้วย REAL CNN Model!")
+                st.sidebar.success("✅ วิเคราะห์เสร็จแล้วด้วย REAL CNN + Typhoon!")
                 
             except Exception as e:
                 st.sidebar.error(f"❌ เกิดข้อผิดพลาด: {str(e)}")
                 print(f"❌ Analysis failed: {e}")
 
-# แสดงผลการวิเคราะห์ภาพ
+# Display analysis results
 if st.session_state.skin_analysis_result:
     st.sidebar.markdown("### 📋 ผลการวิเคราะห์")
     result = st.session_state.skin_analysis_result
     
-    # แสดงข้อมูลโมเดลที่ใช้
+    # Show system info
     st.sidebar.info(f"🧠 Model: {result.get('model_used', 'Unknown')}")
+    st.sidebar.info(f"🌪️ API: {result.get('api_used', 'Unknown')}")
     st.sidebar.info(f"📝 Template: {result.get('template_used', 'Unknown')}")
+    st.sidebar.info(f"🔄 Pipeline: {result.get('pipeline', 'Unknown')}")
     
-    # แสดงผลการจำแนกประเภท
+    # Show prediction
     if result["predicted_class"] == "Abnormal(Ulcer)":
         st.sidebar.warning(f"⚠️ **พบความผิดปกติ** (REAL CNN)")
     else:
@@ -400,12 +429,12 @@ if st.session_state.skin_analysis_result:
     
     st.sidebar.info(f"ความมั่นใจ: {result['confidence']:.1%}")
     
-    # แสดงคำแนะนำจากหมอ (ใช้ get_skin_image_summary_template)
+    # Show AI doctor response
     st.sidebar.markdown("### 💬 คำแนะนำจากแพทย์ AI")
-    st.sidebar.markdown("*ใช้ get_skin_image_summary_template + Typhoon LLM*")
+    st.sidebar.markdown("*ใช้ REAL CNN + get_skin_image_summary_template + REAL Typhoon API*")
     st.sidebar.markdown(result["reply"])
 
-# แชทปกติ
+# Chat input
 user_input = st.chat_input("พิมพ์ข้อความของคุณที่นี่")
 
 if user_input:
@@ -423,7 +452,7 @@ if st.session_state.pending_ai:
     st.session_state.pending_ai = False
     st.rerun()
 
-# --- DEBUG --- (แสดงผลใน sidebar แยกจากวิเคราะห์ผิวหนัง)
+# Debug section
 with st.sidebar.expander("🛠️ DEBUG - รายละเอียดการประมวลผล", expanded=False):
     if "ai1_res" in st.session_state:
         st.markdown("🟦 **AI1 (Consistency Check)**")
@@ -438,6 +467,6 @@ with st.sidebar.expander("🛠️ DEBUG - รายละเอียดกา�
         st.write(st.session_state.ai3_reply)
 
     if "ai3_skin_reply" in st.session_state and st.session_state.ai3_skin_reply:
-        st.markdown("🟪 **AI3 (Doctor Reply - Skin Image Analysis)**")
-        st.markdown("*Using REAL CNN Model + get_skin_image_summary_template*")
+        st.markdown("🟪 **AI3 (Doctor Reply - REAL CNN + Typhoon)**")
+        st.markdown("*Using REAL custom_cnn_dfu_model.h5 + get_skin_image_summary_template + REAL Typhoon API*")
         st.write(st.session_state.ai3_skin_reply)
