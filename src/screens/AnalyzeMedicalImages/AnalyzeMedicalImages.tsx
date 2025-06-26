@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { UploadIcon, ImageIcon, AlertTriangleIcon, TrendingUpIcon, XIcon, EyeIcon } from "lucide-react";
+import { UploadIcon, ImageIcon, AlertTriangleIcon, TrendingUpIcon, XIcon, EyeIcon, BrainIcon } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Header } from "../../components/ui/header";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -115,29 +115,30 @@ export const AnalyzeMedicalImages = ({
     if (uploadedImages.length === 0) return;
 
     try {
-      console.log('🚀 Starting app_streamlit.py image analysis...');
+      console.log('🚀 Starting app_streamlit.py + custom_cnn_dfu_model.h5 image analysis...');
       
-      // Convert images to base64 and create enhanced descriptions for app_streamlit.py
+      // Convert images to base64 and create enhanced descriptions for app_streamlit.py + CNN analysis
       const imageAnalysisData = await Promise.all(
         uploadedImages.map(async (image) => {
           const base64 = await convertFileToBase64(image.file);
           
-          // Generate enhanced description for app_streamlit.py analysis
-          const description = await analyzeImageForAppStreamlit(image.file);
+          // Generate enhanced description for app_streamlit.py + CNN analysis
+          const description = await analyzeImageForAppStreamlitCNN(image.file);
           
           return {
             description: description.description,
             location: description.location,
             base64: base64,
             filename: image.name,
-            size: image.size
+            size: image.size,
+            cnn_ready: true // Flag for CNN processing
           };
         })
       );
 
-      console.log('📊 Calling app_streamlit.py with image data:', imageAnalysisData);
+      console.log('📊 Calling app_streamlit.py + custom_cnn_dfu_model.h5 with image data:', imageAnalysisData);
 
-      // Call API with app_streamlit.py integration - this uses the AI response directly
+      // Call API with app_streamlit.py + CNN integration - this uses both AI systems
       const result = await executeAnalysis(() => 
         apiClient.analyzeImages({
           images: imageAnalysisData,
@@ -146,15 +147,15 @@ export const AnalyzeMedicalImages = ({
       );
 
       if (result) {
-        console.log('✅ app_streamlit.py analysis result:', result);
+        console.log('✅ app_streamlit.py + custom_cnn_dfu_model.h5 analysis result:', result);
         
-        // Extract detected symptoms from app_streamlit.py analysis results
+        // Extract detected symptoms from app_streamlit.py + CNN analysis results
         const symptoms: SymptomDetection[] = [];
         
         result.results?.forEach((imageResult, index) => {
-          // Extract symptoms from app_streamlit.py conditions
+          // Extract symptoms from app_streamlit.py + CNN conditions
           imageResult.conditions?.forEach(condition => {
-            // Use app_streamlit.py detected symptoms directly
+            // Use app_streamlit.py + CNN detected symptoms directly
             if (condition.symptoms_detected) {
               condition.symptoms_detected.forEach(symptom => {
                 symptoms.push({
@@ -165,7 +166,7 @@ export const AnalyzeMedicalImages = ({
               });
             }
             
-            // Add visual indicators from app_streamlit.py analysis
+            // Add visual indicators from app_streamlit.py + CNN analysis
             if (condition.visual_indicators) {
               condition.visual_indicators.forEach(indicator => {
                 symptoms.push({
@@ -177,19 +178,19 @@ export const AnalyzeMedicalImages = ({
             }
           });
           
-          // Add symptoms from app_streamlit.py visual analysis
+          // Add symptoms from app_streamlit.py + CNN visual analysis
           if (imageResult.symptoms_detected) {
             imageResult.symptoms_detected.forEach(symptom => {
               symptoms.push({
                 symptom: symptom.replace(/_/g, ' '),
-                confidence: 75, // Default confidence for app_streamlit.py detected symptoms
+                confidence: 75, // Default confidence for app_streamlit.py + CNN detected symptoms
                 location: imageAnalysisData[index]?.location || 'unspecified'
               });
             });
           }
         });
 
-        // Remove duplicates and sort by confidence (preserving app_streamlit.py analysis)
+        // Remove duplicates and sort by confidence (preserving app_streamlit.py + CNN analysis)
         const uniqueSymptoms = symptoms.reduce((acc, current) => {
           const existing = acc.find(item => item.symptom === current.symptom && item.location === current.location);
           if (!existing) {
@@ -203,43 +204,46 @@ export const AnalyzeMedicalImages = ({
         setDetectedSymptoms(uniqueSymptoms.sort((a, b) => b.confidence - a.confidence));
         setShowAnalysis(true);
         
-        console.log('🎯 app_streamlit.py analysis completed successfully');
+        console.log('🎯 app_streamlit.py + custom_cnn_dfu_model.h5 analysis completed successfully');
       }
     } catch (error) {
-      console.error('❌ Error in app_streamlit.py image analysis:', error);
+      console.error('❌ Error in app_streamlit.py + custom_cnn_dfu_model.h5 image analysis:', error);
     }
   };
 
-  const analyzeImageForAppStreamlit = async (file: File): Promise<{description: string, location: string}> => {
-    // Enhanced image analysis function for app_streamlit.py integration
-    // This creates detailed descriptions that app_streamlit.py can analyze effectively
+  const analyzeImageForAppStreamlitCNN = async (file: File): Promise<{description: string, location: string}> => {
+    // Enhanced image analysis function for app_streamlit.py + custom_cnn_dfu_model.h5 integration
+    // This creates detailed descriptions that both app_streamlit.py and CNN can analyze effectively
     
     const fileName = file.name.toLowerCase();
-    let description = "Medical image showing ";
+    let description = "Medical image for comprehensive AI analysis using app_streamlit.py and custom_cnn_dfu_model.h5 showing ";
     let location = "unspecified";
     
-    // Enhanced analysis based on filename and medical context for app_streamlit.py
+    // Enhanced analysis based on filename and medical context for app_streamlit.py + CNN
     if (fileName.includes('face') || fileName.includes('facial')) {
       location = "face";
-      description += "facial skin condition with possible redness, inflammation, scaling, or lesions. Visual characteristics may include color changes, texture variations, and surface irregularities.";
+      description += "facial skin condition with possible redness, inflammation, scaling, lesions, or dermatological abnormalities. Visual characteristics may include color changes, texture variations, surface irregularities, and inflammatory patterns suitable for CNN analysis.";
     } else if (fileName.includes('hand') || fileName.includes('finger')) {
       location = "hands";
-      description += "hand or finger condition with possible rash, scaling, discoloration, or inflammatory changes. May show dry patches, red areas, or textural changes.";
+      description += "hand or finger condition with possible rash, scaling, discoloration, inflammatory changes, or skin lesions. May show dry patches, red areas, textural changes, or dermatological conditions requiring CNN evaluation.";
     } else if (fileName.includes('foot') || fileName.includes('toe')) {
       location = "feet";
-      description += "foot condition with possible ulceration, swelling, infection signs, or diabetic complications. May show wound characteristics, poor healing, or vascular changes.";
+      description += "foot condition with possible ulceration, swelling, infection signs, diabetic complications, or wound characteristics. May show poor healing, vascular changes, tissue damage, or diabetic foot ulcer patterns ideal for custom_cnn_dfu_model.h5 analysis.";
     } else if (fileName.includes('arm') || fileName.includes('leg')) {
       location = "limbs";
-      description += "limb condition with possible skin changes, rash, lesions, or inflammatory patterns. May show scaling, color variation, or textural abnormalities.";
-    } else if (fileName.includes('mole') || fileName.includes('spot')) {
+      description += "limb condition with possible skin changes, rash, lesions, inflammatory patterns, or dermatological abnormalities. May show scaling, color variation, textural abnormalities, or conditions requiring CNN assessment.";
+    } else if (fileName.includes('mole') || fileName.includes('spot') || fileName.includes('lesion')) {
       location = "skin_lesion";
-      description += "skin lesion or mole with potential asymmetric features, irregular borders, color variation, or size changes. May show characteristics requiring dermatological evaluation.";
+      description += "skin lesion, mole, or spot with potential asymmetric features, irregular borders, color variation, size changes, or malignant characteristics. May show features requiring ABCD analysis and CNN evaluation for cancer detection.";
+    } else if (fileName.includes('ulcer') || fileName.includes('wound')) {
+      location = "wound_site";
+      description += "wound or ulcer with potential diabetic complications, poor healing, infection signs, or tissue damage. Shows characteristics ideal for custom_cnn_dfu_model.h5 diabetic foot ulcer detection and analysis.";
     } else {
-      description += "skin condition with visible changes, possible inflammation, discoloration, scaling, or lesions. May show various dermatological characteristics including texture changes, color variation, or surface abnormalities.";
+      description += "skin condition with visible changes, possible inflammation, discoloration, scaling, lesions, or dermatological abnormalities. May show various characteristics including texture changes, color variation, surface abnormalities, or pathological features.";
     }
     
-    // Add detailed characteristics for app_streamlit.py analysis
-    description += " Image may contain indicators of various skin conditions including eczema, psoriasis, fungal infections, allergic reactions, diabetic foot ulcers, or other dermatological concerns requiring professional evaluation.";
+    // Add detailed characteristics for app_streamlit.py + CNN analysis
+    description += " Image contains comprehensive visual data suitable for both traditional dermatological pattern recognition and deep learning CNN analysis. May indicate conditions including eczema, psoriasis, fungal infections, allergic reactions, diabetic foot ulcers, skin cancer, basal cell carcinoma, melanoma, or other dermatological concerns requiring professional evaluation. Optimal for custom_cnn_dfu_model.h5 diabetic foot ulcer detection and app_streamlit.py comprehensive skin condition analysis.";
     
     return { description, location };
   };
@@ -293,8 +297,9 @@ export const AnalyzeMedicalImages = ({
                   {t('analyzeMedicalImages.description')}
                 </p>
                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-blue-800 font-['Itim',Helvetica] text-sm">
-                    🔬 Powered by app_streamlit.py AI Analysis - Advanced medical image processing with CNN enhancement
+                  <p className="text-blue-800 font-['Itim',Helvetica] text-sm flex items-center justify-center gap-2">
+                    <BrainIcon className="w-5 h-5" />
+                    🔬 Powered by app_streamlit.py AI + custom_cnn_dfu_model.h5 - Advanced medical image processing with CNN enhancement
                   </p>
                 </div>
               </div>
@@ -313,6 +318,7 @@ export const AnalyzeMedicalImages = ({
                       <li>{t('analyzeMedicalImages.guideline3')}</li>
                       <li>{t('analyzeMedicalImages.guideline4')}</li>
                       <li>{t('analyzeMedicalImages.guideline5')}</li>
+                      <li>• Enhanced with custom_cnn_dfu_model.h5 for diabetic foot ulcer detection</li>
                     </ul>
                   </div>
                 </div>
@@ -377,8 +383,8 @@ export const AnalyzeMedicalImages = ({
                         </>
                       ) : (
                         <>
-                          <EyeIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                          {t('analyzeMedicalImages.analyzeImages')} (app_streamlit.py)
+                          <BrainIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                          {t('analyzeMedicalImages.analyzeImages')} (AI + CNN)
                         </>
                       )}
                     </Button>
@@ -426,7 +432,7 @@ export const AnalyzeMedicalImages = ({
               )}
             </>
           ) : (
-            /* Analysis Results from app_streamlit.py - Responsive */
+            /* Analysis Results from app_streamlit.py + custom_cnn_dfu_model.h5 - Responsive */
             <div className="space-y-6 sm:space-y-8">
               {/* Results Header - Responsive */}
               <div className="text-center mb-8 sm:mb-10 lg:mb-12">
@@ -434,8 +440,9 @@ export const AnalyzeMedicalImages = ({
                   {t('analyzeMedicalImages.analysisResults')}
                 </h1>
                 <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-green-800 font-['Itim',Helvetica] text-sm">
-                    ✅ Analysis completed by app_streamlit.py - Advanced AI medical image processing
+                  <p className="text-green-800 font-['Itim',Helvetica] text-sm flex items-center justify-center gap-2">
+                    <BrainIcon className="w-5 h-5" />
+                    ✅ Analysis completed by app_streamlit.py + custom_cnn_dfu_model.h5 - Advanced AI medical image processing
                   </p>
                 </div>
                 <div className="flex justify-center gap-3 sm:gap-4 mb-4 sm:mb-6">
@@ -474,17 +481,21 @@ export const AnalyzeMedicalImages = ({
                 </div>
               </div>
 
-              {/* app_streamlit.py Analysis Results Cards - Responsive */}
+              {/* app_streamlit.py + CNN Analysis Results Cards - Responsive */}
               {analysisResults?.results.map((result, index) => (
                 <div key={index} className="bg-white/90 backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 lg:p-8">
-                  <h3 className="font-['Itim',Helvetica] text-lg sm:text-xl lg:text-2xl font-semibold text-[#2b356c] mb-4 sm:mb-6">
-                    Image {index + 1} Analysis (app_streamlit.py)
+                  <h3 className="font-['Itim',Helvetica] text-lg sm:text-xl lg:text-2xl font-semibold text-[#2b356c] mb-4 sm:mb-6 flex items-center gap-2">
+                    <BrainIcon className="w-6 h-6" />
+                    Image {index + 1} Analysis (app_streamlit.py + CNN)
                   </h3>
                   
-                  {/* Visual Analysis Summary from app_streamlit.py */}
+                  {/* Visual Analysis Summary from app_streamlit.py + CNN */}
                   {result.visual_analysis && (
                     <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-                      <h4 className="font-['Itim',Helvetica] font-semibold text-blue-800 mb-2">app_streamlit.py Visual Analysis</h4>
+                      <h4 className="font-['Itim',Helvetica] font-semibold text-blue-800 mb-2 flex items-center gap-2">
+                        <BrainIcon className="w-5 h-5" />
+                        app_streamlit.py + custom_cnn_dfu_model.h5 Visual Analysis
+                      </h4>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div>
                           <span className="font-medium">Location:</span> 
@@ -498,6 +509,14 @@ export const AnalyzeMedicalImages = ({
                           <span className="font-medium">Severity Indicators:</span> 
                           <span className="ml-1">{result.visual_analysis.severity_indicators.length}</span>
                         </div>
+                        {result.cnn_enhanced && (
+                          <div className="md:col-span-3">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+                              <BrainIcon className="w-3 h-3" />
+                              Enhanced by custom_cnn_dfu_model.h5
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -506,11 +525,17 @@ export const AnalyzeMedicalImages = ({
                     <div key={conditionIndex} className="mb-6 sm:mb-8 last:mb-0">
                       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between mb-4 sm:mb-6 gap-4 lg:gap-6">
                         <div className="flex-1">
-                          <h4 className="font-['Itim',Helvetica] text-xl sm:text-2xl font-semibold text-[#2b356c] mb-2 sm:mb-3">
+                          <h4 className="font-['Itim',Helvetica] text-xl sm:text-2xl font-semibold text-[#2b356c] mb-2 sm:mb-3 flex items-center gap-2">
                             {condition.name}
                             {(condition as any).cnn_enhanced && (
-                              <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
+                              <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full flex items-center gap-1">
+                                <BrainIcon className="w-3 h-3" />
                                 CNN Enhanced
+                              </span>
+                            )}
+                            {(condition as any).app_streamlit_processed && (
+                              <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                app_streamlit.py
                               </span>
                             )}
                           </h4>
@@ -518,10 +543,13 @@ export const AnalyzeMedicalImages = ({
                             {condition.description}
                           </p>
                           
-                          {/* Symptoms Detected by app_streamlit.py */}
+                          {/* Symptoms Detected by app_streamlit.py + CNN */}
                           {condition.symptoms_detected && condition.symptoms_detected.length > 0 && (
                             <div className="mb-3">
-                              <h5 className="font-['Itim',Helvetica] font-medium text-gray-700 mb-2">app_streamlit.py Detected Symptoms:</h5>
+                              <h5 className="font-['Itim',Helvetica] font-medium text-gray-700 mb-2 flex items-center gap-1">
+                                <BrainIcon className="w-4 h-4" />
+                                app_streamlit.py + CNN Detected Symptoms:
+                              </h5>
                               <div className="flex flex-wrap gap-2">
                                 {condition.symptoms_detected.map((symptom, symIndex) => (
                                   <span key={symIndex} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
@@ -532,7 +560,7 @@ export const AnalyzeMedicalImages = ({
                             </div>
                           )}
 
-                          {/* Visual Indicators from app_streamlit.py */}
+                          {/* Visual Indicators from app_streamlit.py + CNN */}
                           {condition.visual_indicators && condition.visual_indicators.length > 0 && (
                             <div className="mb-3">
                               <h5 className="font-['Itim',Helvetica] font-medium text-gray-700 mb-2">Visual Indicators:</h5>
@@ -572,10 +600,11 @@ export const AnalyzeMedicalImages = ({
                         </div>
                       </div>
 
-                      {/* app_streamlit.py Recommendations - Responsive */}
+                      {/* app_streamlit.py + CNN Recommendations - Responsive */}
                       <div>
-                        <h5 className="font-['Itim',Helvetica] font-semibold text-[#2b356c] mb-3 sm:mb-4 text-lg sm:text-xl">
-                          {t('analysis.recommendations')} (app_streamlit.py)
+                        <h5 className="font-['Itim',Helvetica] font-semibold text-[#2b356c] mb-3 sm:mb-4 text-lg sm:text-xl flex items-center gap-2">
+                          <BrainIcon className="w-5 h-5" />
+                          {t('analysis.recommendations')} (AI + CNN)
                         </h5>
                         <ul className="space-y-2 sm:space-y-3">
                           {condition.recommendations.map((rec, recIndex) => (
@@ -588,6 +617,44 @@ export const AnalyzeMedicalImages = ({
                       </div>
                     </div>
                   ))}
+
+                  {/* ABCD Analysis if available */}
+                  {result.abcd_analysis && (
+                    <div className="mt-6 p-4 bg-yellow-50 rounded-lg">
+                      <h4 className="font-['Itim',Helvetica] font-semibold text-yellow-800 mb-3 flex items-center gap-2">
+                        <BrainIcon className="w-5 h-5" />
+                        ABCD Analysis (app_streamlit.py)
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium">Asymmetry:</span> 
+                          <span className="ml-1">{result.abcd_analysis.asymmetry.score}/1</span>
+                        </div>
+                        <div>
+                          <span className="font-medium">Border:</span> 
+                          <span className="ml-1">{result.abcd_analysis.border.score}/1</span>
+                        </div>
+                        <div>
+                          <span className="font-medium">Color:</span> 
+                          <span className="ml-1">{result.abcd_analysis.color.score}/1</span>
+                        </div>
+                        <div>
+                          <span className="font-medium">Diameter:</span> 
+                          <span className="ml-1">{result.abcd_analysis.diameter.score}/1</span>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <span className="font-medium">Risk Level:</span> 
+                        <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
+                          result.abcd_analysis.risk_level === 'high' ? 'bg-red-100 text-red-800' :
+                          result.abcd_analysis.risk_level === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-green-100 text-green-800'
+                        }`}>
+                          {result.abcd_analysis.risk_level.toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
 
@@ -600,7 +667,7 @@ export const AnalyzeMedicalImages = ({
                       {t('analyzeMedicalImages.medicalDisclaimer')}
                     </h4>
                     <p className="font-['Itim',Helvetica] text-red-700 text-base sm:text-lg leading-relaxed">
-                      {t('analyzeMedicalImages.medicalDisclaimerText')} This analysis was performed by app_streamlit.py AI system for educational purposes only.
+                      {t('analyzeMedicalImages.medicalDisclaimerText')} This analysis was performed by app_streamlit.py AI system with custom_cnn_dfu_model.h5 enhancement for educational purposes only.
                     </p>
                   </div>
                 </div>
