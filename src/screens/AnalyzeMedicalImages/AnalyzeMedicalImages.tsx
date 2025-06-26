@@ -115,30 +115,29 @@ export const AnalyzeMedicalImages = ({
     if (uploadedImages.length === 0) return;
 
     try {
-      console.log('🚀 Starting predict_skin_disease analysis from skin_model_predict.py...');
+      console.log('🚀 Starting app_streamlit.py image analysis...');
       
-      // Convert images to base64 and create enhanced descriptions for predict_skin_disease
+      // Convert images to base64 and create enhanced descriptions for app_streamlit.py
       const imageAnalysisData = await Promise.all(
         uploadedImages.map(async (image) => {
           const base64 = await convertFileToBase64(image.file);
           
-          // Generate enhanced description for predict_skin_disease analysis
-          const description = await analyzeImageForPredictSkinDisease(image.file);
+          // Generate enhanced description for app_streamlit.py analysis
+          const description = await analyzeImageForAppStreamlit(image.file);
           
           return {
             description: description.description,
             location: description.location,
             base64: base64,
             filename: image.name,
-            size: image.size,
-            imageFile: image.file
+            size: image.size
           };
         })
       );
 
-      console.log('📊 Calling predict_skin_disease with image data:', imageAnalysisData);
+      console.log('📊 Calling app_streamlit.py with image data:', imageAnalysisData);
 
-      // Call API with predict_skin_disease integration - this goes to skin_model_predict.py
+      // Call API with app_streamlit.py integration - this uses the AI response directly
       const result = await executeAnalysis(() => 
         apiClient.analyzeImages({
           images: imageAnalysisData,
@@ -147,15 +146,15 @@ export const AnalyzeMedicalImages = ({
       );
 
       if (result) {
-        console.log('✅ predict_skin_disease analysis result:', result);
+        console.log('✅ app_streamlit.py analysis result:', result);
         
-        // Extract detected symptoms from predict_skin_disease analysis results
+        // Extract detected symptoms from app_streamlit.py analysis results
         const symptoms: SymptomDetection[] = [];
         
         result.results?.forEach((imageResult, index) => {
-          // Extract symptoms from predict_skin_disease conditions
+          // Extract symptoms from app_streamlit.py conditions
           imageResult.conditions?.forEach(condition => {
-            // Use predict_skin_disease detected symptoms directly
+            // Use app_streamlit.py detected symptoms directly
             if (condition.symptoms_detected) {
               condition.symptoms_detected.forEach(symptom => {
                 symptoms.push({
@@ -166,7 +165,7 @@ export const AnalyzeMedicalImages = ({
               });
             }
             
-            // Add visual indicators from predict_skin_disease analysis
+            // Add visual indicators from app_streamlit.py analysis
             if (condition.visual_indicators) {
               condition.visual_indicators.forEach(indicator => {
                 symptoms.push({
@@ -178,19 +177,19 @@ export const AnalyzeMedicalImages = ({
             }
           });
           
-          // Add symptoms from predict_skin_disease visual analysis
+          // Add symptoms from app_streamlit.py visual analysis
           if (imageResult.symptoms_detected) {
             imageResult.symptoms_detected.forEach(symptom => {
               symptoms.push({
                 symptom: symptom.replace(/_/g, ' '),
-                confidence: 75, // Default confidence for predict_skin_disease detected symptoms
+                confidence: 75, // Default confidence for app_streamlit.py detected symptoms
                 location: imageAnalysisData[index]?.location || 'unspecified'
               });
             });
           }
         });
 
-        // Remove duplicates and sort by confidence (preserving predict_skin_disease analysis)
+        // Remove duplicates and sort by confidence (preserving app_streamlit.py analysis)
         const uniqueSymptoms = symptoms.reduce((acc, current) => {
           const existing = acc.find(item => item.symptom === current.symptom && item.location === current.location);
           if (!existing) {
@@ -204,46 +203,43 @@ export const AnalyzeMedicalImages = ({
         setDetectedSymptoms(uniqueSymptoms.sort((a, b) => b.confidence - a.confidence));
         setShowAnalysis(true);
         
-        console.log('🎯 predict_skin_disease analysis completed successfully');
+        console.log('🎯 app_streamlit.py analysis completed successfully');
       }
     } catch (error) {
-      console.error('❌ Error in predict_skin_disease image analysis:', error);
+      console.error('❌ Error in app_streamlit.py image analysis:', error);
     }
   };
 
-  const analyzeImageForPredictSkinDisease = async (file: File): Promise<{description: string, location: string}> => {
-    // Enhanced image analysis function for predict_skin_disease integration
-    // This creates detailed descriptions that predict_skin_disease can analyze effectively
+  const analyzeImageForAppStreamlit = async (file: File): Promise<{description: string, location: string}> => {
+    // Enhanced image analysis function for app_streamlit.py integration
+    // This creates detailed descriptions that app_streamlit.py can analyze effectively
     
     const fileName = file.name.toLowerCase();
-    let description = "Medical skin image for predict_skin_disease analysis showing ";
+    let description = "Medical image showing ";
     let location = "unspecified";
     
-    // Enhanced analysis based on filename and medical context for predict_skin_disease
+    // Enhanced analysis based on filename and medical context for app_streamlit.py
     if (fileName.includes('face') || fileName.includes('facial')) {
       location = "face";
-      description += "facial skin condition with potential dermatological features. May include redness, inflammation, scaling, lesions, or other skin abnormalities requiring medical evaluation.";
+      description += "facial skin condition with possible redness, inflammation, scaling, or lesions. Visual characteristics may include color changes, texture variations, and surface irregularities.";
     } else if (fileName.includes('hand') || fileName.includes('finger')) {
       location = "hands";
-      description += "hand or finger skin condition with possible rash, scaling, discoloration, inflammatory changes, or dermatological abnormalities. May show dry patches, red areas, or textural changes.";
+      description += "hand or finger condition with possible rash, scaling, discoloration, or inflammatory changes. May show dry patches, red areas, or textural changes.";
     } else if (fileName.includes('foot') || fileName.includes('toe')) {
       location = "feet";
-      description += "foot skin condition with potential ulceration, diabetic complications, swelling, infection signs, or wound characteristics. May show poor healing, vascular changes, or diabetic foot ulcer features.";
+      description += "foot condition with possible ulceration, swelling, infection signs, or diabetic complications. May show wound characteristics, poor healing, or vascular changes.";
     } else if (fileName.includes('arm') || fileName.includes('leg')) {
       location = "limbs";
-      description += "limb skin condition with possible skin changes, rash, lesions, inflammatory patterns, scaling, color variation, or textural abnormalities.";
-    } else if (fileName.includes('mole') || fileName.includes('spot') || fileName.includes('lesion')) {
+      description += "limb condition with possible skin changes, rash, lesions, or inflammatory patterns. May show scaling, color variation, or textural abnormalities.";
+    } else if (fileName.includes('mole') || fileName.includes('spot')) {
       location = "skin_lesion";
-      description += "skin lesion or mole with potential asymmetric features, irregular borders, color variation, size changes, or characteristics requiring dermatological evaluation.";
-    } else if (fileName.includes('ulcer') || fileName.includes('wound')) {
-      location = "wound_site";
-      description += "skin ulcer or wound with potential diabetic complications, poor healing characteristics, infection signs, or abnormal tissue appearance.";
+      description += "skin lesion or mole with potential asymmetric features, irregular borders, color variation, or size changes. May show characteristics requiring dermatological evaluation.";
     } else {
-      description += "skin condition with visible dermatological changes, possible inflammation, discoloration, scaling, lesions, or other abnormalities requiring medical assessment.";
+      description += "skin condition with visible changes, possible inflammation, discoloration, scaling, or lesions. May show various dermatological characteristics including texture changes, color variation, or surface abnormalities.";
     }
     
-    // Add detailed characteristics for predict_skin_disease analysis
-    description += " Image contains skin features that may indicate various dermatological conditions including eczema, psoriasis, fungal infections, allergic reactions, diabetic foot ulcers, skin cancer concerns, or other medical conditions requiring professional dermatological evaluation. Visual characteristics may include texture changes, color variations, surface abnormalities, inflammatory signs, or pathological features.";
+    // Add detailed characteristics for app_streamlit.py analysis
+    description += " Image may contain indicators of various skin conditions including eczema, psoriasis, fungal infections, allergic reactions, diabetic foot ulcers, or other dermatological concerns requiring professional evaluation.";
     
     return { description, location };
   };
@@ -296,9 +292,9 @@ export const AnalyzeMedicalImages = ({
                 <p className="font-['Itim',Helvetica] text-sm sm:text-base md:text-lg lg:text-xl text-black max-w-4xl mx-auto leading-relaxed px-2">
                   {t('analyzeMedicalImages.description')}
                 </p>
-                <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                  <p className="text-purple-800 font-['Itim',Helvetica] text-sm">
-                    🔬 Powered by predict_skin_disease from skin_model_predict.py + ai_chain_skin_doctor_reply from app_streamlit.py
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-blue-800 font-['Itim',Helvetica] text-sm">
+                    🔬 Powered by app_streamlit.py AI Analysis - Advanced medical image processing with CNN enhancement
                   </p>
                 </div>
               </div>
@@ -377,12 +373,12 @@ export const AnalyzeMedicalImages = ({
                       {isAnalyzing ? (
                         <>
                           <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-white"></div>
-                          Analyzing with predict_skin_disease...
+                          {t('analyzeMedicalImages.analyzingImages')}
                         </>
                       ) : (
                         <>
                           <EyeIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                          Analyze with predict_skin_disease
+                          {t('analyzeMedicalImages.analyzeImages')} (app_streamlit.py)
                         </>
                       )}
                     </Button>
@@ -430,7 +426,7 @@ export const AnalyzeMedicalImages = ({
               )}
             </>
           ) : (
-            /* Analysis Results from predict_skin_disease - Responsive */
+            /* Analysis Results from app_streamlit.py - Responsive */
             <div className="space-y-6 sm:space-y-8">
               {/* Results Header - Responsive */}
               <div className="text-center mb-8 sm:mb-10 lg:mb-12">
@@ -439,7 +435,7 @@ export const AnalyzeMedicalImages = ({
                 </h1>
                 <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-green-800 font-['Itim',Helvetica] text-sm">
-                    ✅ Analysis completed by predict_skin_disease + ai_chain_skin_doctor_reply
+                    ✅ Analysis completed by app_streamlit.py - Advanced AI medical image processing
                   </p>
                 </div>
                 <div className="flex justify-center gap-3 sm:gap-4 mb-4 sm:mb-6">
@@ -478,48 +474,17 @@ export const AnalyzeMedicalImages = ({
                 </div>
               </div>
 
-              {/* predict_skin_disease Analysis Results Cards - Responsive */}
+              {/* app_streamlit.py Analysis Results Cards - Responsive */}
               {analysisResults?.results.map((result, index) => (
                 <div key={index} className="bg-white/90 backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 lg:p-8">
                   <h3 className="font-['Itim',Helvetica] text-lg sm:text-xl lg:text-2xl font-semibold text-[#2b356c] mb-4 sm:mb-6">
-                    Image {index + 1} Analysis (predict_skin_disease)
+                    Image {index + 1} Analysis (app_streamlit.py)
                   </h3>
                   
-                  {/* CNN Prediction Results */}
-                  {result.predicted_class && (
-                    <div className="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
-                      <h4 className="font-['Itim',Helvetica] font-semibold text-purple-800 mb-2">
-                        🧠 CNN Model Prediction (predict_skin_disease)
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium">Predicted Class:</span> 
-                          <span className="ml-1">{result.predicted_class}</span>
-                        </div>
-                        <div>
-                          <span className="font-medium">CNN Confidence:</span> 
-                          <span className="ml-1">{result.cnn_confidence ? `${(result.cnn_confidence * 100).toFixed(1)}%` : 'N/A'}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* AI Doctor Response from app_streamlit.py */}
-                  {result.ai_response && (
-                    <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <h4 className="font-['Itim',Helvetica] font-semibold text-blue-800 mb-3">
-                        🩺 AI Doctor Response (ai_chain_skin_doctor_reply)
-                      </h4>
-                      <div className="text-blue-900 font-['Itim',Helvetica] text-base leading-relaxed whitespace-pre-line">
-                        {result.ai_response}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Visual Analysis Summary from predict_skin_disease */}
+                  {/* Visual Analysis Summary from app_streamlit.py */}
                   {result.visual_analysis && (
-                    <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                      <h4 className="font-['Itim',Helvetica] font-semibold text-gray-800 mb-2">predict_skin_disease Visual Analysis</h4>
+                    <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+                      <h4 className="font-['Itim',Helvetica] font-semibold text-blue-800 mb-2">app_streamlit.py Visual Analysis</h4>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div>
                           <span className="font-medium">Location:</span> 
@@ -543,18 +508,20 @@ export const AnalyzeMedicalImages = ({
                         <div className="flex-1">
                           <h4 className="font-['Itim',Helvetica] text-xl sm:text-2xl font-semibold text-[#2b356c] mb-2 sm:mb-3">
                             {condition.name}
-                            <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
-                              predict_skin_disease
-                            </span>
+                            {(condition as any).cnn_enhanced && (
+                              <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
+                                CNN Enhanced
+                              </span>
+                            )}
                           </h4>
                           <p className="font-['Itim',Helvetica] text-gray-600 mb-3 sm:mb-4 text-base sm:text-lg leading-relaxed">
                             {condition.description}
                           </p>
                           
-                          {/* Symptoms Detected by predict_skin_disease */}
+                          {/* Symptoms Detected by app_streamlit.py */}
                           {condition.symptoms_detected && condition.symptoms_detected.length > 0 && (
                             <div className="mb-3">
-                              <h5 className="font-['Itim',Helvetica] font-medium text-gray-700 mb-2">predict_skin_disease Detected Symptoms:</h5>
+                              <h5 className="font-['Itim',Helvetica] font-medium text-gray-700 mb-2">app_streamlit.py Detected Symptoms:</h5>
                               <div className="flex flex-wrap gap-2">
                                 {condition.symptoms_detected.map((symptom, symIndex) => (
                                   <span key={symIndex} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
@@ -565,7 +532,7 @@ export const AnalyzeMedicalImages = ({
                             </div>
                           )}
 
-                          {/* Visual Indicators from predict_skin_disease */}
+                          {/* Visual Indicators from app_streamlit.py */}
                           {condition.visual_indicators && condition.visual_indicators.length > 0 && (
                             <div className="mb-3">
                               <h5 className="font-['Itim',Helvetica] font-medium text-gray-700 mb-2">Visual Indicators:</h5>
@@ -605,10 +572,10 @@ export const AnalyzeMedicalImages = ({
                         </div>
                       </div>
 
-                      {/* predict_skin_disease Recommendations - Responsive */}
+                      {/* app_streamlit.py Recommendations - Responsive */}
                       <div>
                         <h5 className="font-['Itim',Helvetica] font-semibold text-[#2b356c] mb-3 sm:mb-4 text-lg sm:text-xl">
-                          {t('analysis.recommendations')} (predict_skin_disease)
+                          {t('analysis.recommendations')} (app_streamlit.py)
                         </h5>
                         <ul className="space-y-2 sm:space-y-3">
                           {condition.recommendations.map((rec, recIndex) => (
@@ -633,7 +600,7 @@ export const AnalyzeMedicalImages = ({
                       {t('analyzeMedicalImages.medicalDisclaimer')}
                     </h4>
                     <p className="font-['Itim',Helvetica] text-red-700 text-base sm:text-lg leading-relaxed">
-                      {t('analyzeMedicalImages.medicalDisclaimerText')} This analysis was performed by predict_skin_disease function with ai_chain_skin_doctor_reply from app_streamlit.py for educational purposes only.
+                      {t('analyzeMedicalImages.medicalDisclaimerText')} This analysis was performed by app_streamlit.py AI system for educational purposes only.
                     </p>
                   </div>
                 </div>
