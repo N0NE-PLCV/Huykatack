@@ -115,9 +115,9 @@ export const AnalyzeMedicalImages = ({
     if (uploadedImages.length === 0) return;
 
     try {
-      console.log('Starting app_streamlit.py image analysis...');
+      console.log('🚀 Starting app_streamlit.py image analysis...');
       
-      // Convert images to base64 and create descriptions for app_streamlit.py
+      // Convert images to base64 and create enhanced descriptions for app_streamlit.py
       const imageAnalysisData = await Promise.all(
         uploadedImages.map(async (image) => {
           const base64 = await convertFileToBase64(image.file);
@@ -135,9 +135,9 @@ export const AnalyzeMedicalImages = ({
         })
       );
 
-      console.log('Calling app_streamlit.py with image data:', imageAnalysisData);
+      console.log('📊 Calling app_streamlit.py with image data:', imageAnalysisData);
 
-      // Call API with app_streamlit.py integration - this uses the response directly
+      // Call API with app_streamlit.py integration - this uses the AI response directly
       const result = await executeAnalysis(() => 
         apiClient.analyzeImages({
           images: imageAnalysisData,
@@ -146,7 +146,7 @@ export const AnalyzeMedicalImages = ({
       );
 
       if (result) {
-        console.log('app_streamlit.py analysis result:', result);
+        console.log('✅ app_streamlit.py analysis result:', result);
         
         // Extract detected symptoms from app_streamlit.py analysis results
         const symptoms: SymptomDetection[] = [];
@@ -203,10 +203,10 @@ export const AnalyzeMedicalImages = ({
         setDetectedSymptoms(uniqueSymptoms.sort((a, b) => b.confidence - a.confidence));
         setShowAnalysis(true);
         
-        console.log('app_streamlit.py analysis completed successfully');
+        console.log('🎯 app_streamlit.py analysis completed successfully');
       }
     } catch (error) {
-      console.error('Error in app_streamlit.py image analysis:', error);
+      console.error('❌ Error in app_streamlit.py image analysis:', error);
     }
   };
 
@@ -239,7 +239,7 @@ export const AnalyzeMedicalImages = ({
     }
     
     // Add detailed characteristics for app_streamlit.py analysis
-    description += " Image may contain indicators of various skin conditions including eczema, psoriasis, fungal infections, allergic reactions, or other dermatological concerns.";
+    description += " Image may contain indicators of various skin conditions including eczema, psoriasis, fungal infections, allergic reactions, diabetic foot ulcers, or other dermatological concerns requiring professional evaluation.";
     
     return { description, location };
   };
