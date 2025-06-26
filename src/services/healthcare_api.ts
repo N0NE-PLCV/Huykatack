@@ -135,7 +135,7 @@ class HealthcareAnalysisService {
         const realAnalysis = await this.executeRealPredictSkinDisease(image, imageType);
         
         console.log(`✅ Image ${index + 1} processed by REAL CNN + Typhoon`);
-        console.log(`🧠 REAL CNN Result: ${realAnalysis.predicted_class} (${realAnalysis.confidence:.1%})`);
+        console.log(`🧠 REAL CNN Result: ${realAnalysis.predicted_class} (${(realAnalysis.confidence * 100).toFixed(1)}%)`);
         console.log(`🌪️ Typhoon AI Response: ${realAnalysis.ai_response.substring(0, 100)}...`);
         
         return {
