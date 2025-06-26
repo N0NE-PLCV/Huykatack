@@ -1,0 +1,1 @@
+export { CheckSymptoms } from "./CheckSymptoms";
