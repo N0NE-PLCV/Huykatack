@@ -506,10 +506,10 @@ export const AnalyzeMedicalImages = ({
                         
                         <div className="text-center lg:text-right lg:ml-6 flex-shrink-0">
                           <div className="text-3xl sm:text-4xl font-bold text-[#3991db] font-['Itim',Helvetica]">
-                            {Math.round(condition.probability)}%
+                            {condition.probability}%
                           </div>
                           <div className="text-base sm:text-lg text-gray-500 font-['Itim',Helvetica] mb-2 sm:mb-3">
-                            {t('analyzeMedicalImages.confidence')} {Math.round(condition.confidence)}%
+                            {t('analyzeMedicalImages.confidence')} {condition.confidence}%
                           </div>
                           <div className={`inline-block px-3 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-medium border ${getSeverityColor(condition.severity)}`}>
                             {condition.severity === 'low' && t('analysis.lowRisk')}
@@ -524,7 +524,7 @@ export const AnalyzeMedicalImages = ({
                         <div className="w-full bg-gray-200 rounded-full h-3 sm:h-4">
                           <div
                             className="bg-[#3991db] h-3 sm:h-4 rounded-full transition-all duration-1000"
-                            style={{ width: `${Math.round(condition.probability)}%` }}
+                            style={{ width: `${condition.probability}%` }}
                           ></div>
                         </div>
                       </div>

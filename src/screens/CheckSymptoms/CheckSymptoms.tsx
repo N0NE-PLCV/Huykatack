@@ -508,7 +508,7 @@ export const CheckSymptoms = ({
                     
                     <div className="text-center lg:text-right lg:ml-6 flex-shrink-0">
                       <div className="text-3xl sm:text-4xl font-bold text-[#3991db] font-['Itim',Helvetica]">
-                        {Math.round(result.probability)}%
+                        {result.probability}%
                       </div>
                       <div className={`inline-block px-3 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-medium border ${getSeverityColor(result.severity)} mt-2`}>
                         {result.severity === 'low' && t('analysis.lowRisk')}
@@ -523,7 +523,7 @@ export const CheckSymptoms = ({
                     <div className="w-full bg-gray-200 rounded-full h-3 sm:h-4">
                       <div
                         className="bg-[#3991db] h-3 sm:h-4 rounded-full transition-all duration-1000"
-                        style={{ width: `${Math.round(result.probability)}%` }}
+                        style={{ width: `${result.probability}%` }}
                       ></div>
                     </div>
                   </div>
