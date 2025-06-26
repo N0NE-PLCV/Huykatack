@@ -9,6 +9,7 @@ import io
 import numpy as np
 from typing import List, Dict, Optional, Tuple
 import json
+import os
 
 class SkinConditionPredictor:
     """
@@ -21,25 +22,35 @@ class SkinConditionPredictor:
         self.skin_conditions = self._load_skin_conditions()
         self.confidence_threshold = 0.3
         self.cnn_model = None
+        self.model_loaded = False
         self._load_cnn_model()
     
     def _load_cnn_model(self):
         """
-        Load the custom CNN DFU model.
+        Load the real custom CNN DFU model from custom_cnn_dfu_model.h5
         """
         try:
-            # Try to load the CNN model if available
             import tensorflow as tf
             model_path = "/home/project/models/custom_cnn_dfu_model/custom_cnn_dfu_model.h5"
-            self.cnn_model = tf.keras.models.load_model(model_path, compile=False)
-            print("Custom CNN DFU model loaded successfully")
+            
+            if os.path.exists(model_path):
+                print(f"🔍 Loading real CNN model from: {model_path}")
+                self.cnn_model = tf.keras.models.load_model(model_path, compile=False)
+                self.model_loaded = True
+                print("✅ Real custom CNN DFU model loaded successfully")
+                print(f"📊 Model input shape: {self.cnn_model.input_shape}")
+                print(f"📊 Model output shape: {self.cnn_model.output_shape}")
+            else:
+                print(f"❌ Model file not found at: {model_path}")
+                raise FileNotFoundError(f"CNN model not found at {model_path}")
+                
         except Exception as e:
-            print(f"CNN model not available: {e}")
-            self.cnn_model = None
+            print(f"❌ Failed to load real CNN model: {e}")
+            raise Exception(f"Cannot proceed without real CNN model: {e}")
     
     def predict_skin_disease(self, img_pil):
         """
-        Main function to predict skin disease from PIL image.
+        Main function to predict skin disease from PIL image using REAL CNN model.
         This is the function called from the Analyze Medical Images page.
         
         Args:
@@ -48,88 +59,109 @@ class SkinConditionPredictor:
         Returns:
             Tuple[str, float]: (predicted_class, confidence)
         """
+        if not self.model_loaded or self.cnn_model is None:
+            raise Exception("Real CNN model is not loaded. Cannot perform prediction.")
+        
         try:
-            # Use CNN model if available
-            if self.cnn_model is not None:
-                predicted_class, confidence = self._predict_with_cnn(img_pil)
-            else:
-                # Fallback to rule-based analysis
-                predicted_class, confidence = self._predict_with_rules(img_pil)
+            print("🔬 Starting predict_skin_disease with REAL CNN model...")
             
-            print(f"🔬 predict_skin_disease result: {predicted_class} (confidence: {confidence:.1%})")
+            # Use REAL CNN model for prediction
+            predicted_class, confidence = self._predict_with_real_cnn(img_pil)
+            
+            print(f"🎯 Real CNN prediction: {predicted_class} (confidence: {confidence:.1%})")
             
             return predicted_class, confidence
             
         except Exception as e:
-            print(f"Error in predict_skin_disease: {e}")
-            # Return default prediction
-            return "Normal(Healthy skin)", 0.5
+            print(f"❌ Error in predict_skin_disease with real CNN: {e}")
+            raise Exception(f"Real CNN prediction failed: {e}")
     
-    def _predict_with_cnn(self, img_pil):
+    def _predict_with_real_cnn(self, img_pil):
         """
-        Predict using CNN model.
+        Predict using the REAL CNN model from custom_cnn_dfu_model.h5
         """
         try:
-            # Prepare image for CNN model
-            IMAGE_SIZE = (224, 224)
-            CLASS_NAMES = ['Abnormal(Ulcer)', 'Normal(Healthy skin)']
+            print("🧠 Processing image with REAL CNN model...")
             
-            # Resize and normalize
-            img = img_pil.resize(IMAGE_SIZE)
-            img_array = np.array(img).astype('float32') / 255.0
+            # Get model input shape from the real model
+            input_shape = self.cnn_model.input_shape
+            if len(input_shape) == 4:  # (batch, height, width, channels)
+                IMAGE_HEIGHT = input_shape[1]
+                IMAGE_WIDTH = input_shape[2]
+                CHANNELS = input_shape[3]
+            else:
+                # Default fallback
+                IMAGE_HEIGHT, IMAGE_WIDTH, CHANNELS = 224, 224, 3
             
-            # Handle different image formats
-            if img_array.ndim == 2:
+            print(f"📐 Using model input shape: {IMAGE_HEIGHT}x{IMAGE_WIDTH}x{CHANNELS}")
+            
+            # Prepare image for REAL CNN model
+            img = img_pil.convert('RGB')  # Ensure RGB format
+            img = img.resize((IMAGE_WIDTH, IMAGE_HEIGHT))
+            img_array = np.array(img).astype('float32')
+            
+            # Normalize pixel values to [0, 1]
+            img_array = img_array / 255.0
+            
+            # Ensure correct number of channels
+            if CHANNELS == 1 and img_array.shape[2] == 3:
+                # Convert to grayscale if model expects 1 channel
+                img_array = np.mean(img_array, axis=2, keepdims=True)
+            elif CHANNELS == 3 and len(img_array.shape) == 2:
+                # Convert grayscale to RGB if model expects 3 channels
                 img_array = np.stack([img_array]*3, axis=-1)
-            elif img_array.shape[2] == 4:
-                img_array = img_array[:, :, :3]
             
             # Add batch dimension
             img_array = np.expand_dims(img_array, axis=0)
             
-            # Make prediction
+            print(f"🖼️ Preprocessed image shape: {img_array.shape}")
+            
+            # Make prediction with REAL CNN model
+            print("🔮 Running inference with real CNN model...")
             prediction = self.cnn_model.predict(img_array, verbose=0)
-            predicted_class = CLASS_NAMES[np.argmax(prediction)]
-            confidence = float(np.max(prediction))
+            
+            print(f"📊 Raw CNN output: {prediction}")
+            
+            # Interpret prediction results
+            # Assuming binary classification: [Normal, Abnormal] or [Healthy, Ulcer]
+            if prediction.shape[1] == 2:
+                # Binary classification
+                class_probabilities = prediction[0]
+                predicted_class_idx = np.argmax(class_probabilities)
+                confidence = float(np.max(class_probabilities))
+                
+                # Map to class names (adjust based on your model's training)
+                CLASS_NAMES = ['Normal(Healthy skin)', 'Abnormal(Ulcer)']
+                predicted_class = CLASS_NAMES[predicted_class_idx]
+                
+            elif prediction.shape[1] == 1:
+                # Single output (sigmoid)
+                confidence = float(prediction[0][0])
+                if confidence > 0.5:
+                    predicted_class = 'Abnormal(Ulcer)'
+                else:
+                    predicted_class = 'Normal(Healthy skin)'
+                    confidence = 1.0 - confidence
+            else:
+                # Multi-class classification
+                class_probabilities = prediction[0]
+                predicted_class_idx = np.argmax(class_probabilities)
+                confidence = float(np.max(class_probabilities))
+                
+                # Define class names based on your model
+                CLASS_NAMES = ['Normal(Healthy skin)', 'Abnormal(Ulcer)', 'Other_Condition']
+                if predicted_class_idx < len(CLASS_NAMES):
+                    predicted_class = CLASS_NAMES[predicted_class_idx]
+                else:
+                    predicted_class = f'Class_{predicted_class_idx}'
+            
+            print(f"✅ Real CNN prediction complete: {predicted_class} ({confidence:.1%})")
             
             return predicted_class, confidence
             
         except Exception as e:
-            print(f"CNN prediction error: {e}")
-            return self._predict_with_rules(img_pil)
-    
-    def _predict_with_rules(self, img_pil):
-        """
-        Fallback rule-based prediction.
-        """
-        # Simple rule-based analysis based on image characteristics
-        # This is a simplified version - in reality you'd analyze image features
-        
-        # Convert to numpy array for basic analysis
-        img_array = np.array(img_pil)
-        
-        # Basic color analysis
-        if len(img_array.shape) == 3:
-            # Calculate average color values
-            avg_red = np.mean(img_array[:, :, 0])
-            avg_green = np.mean(img_array[:, :, 1])
-            avg_blue = np.mean(img_array[:, :, 2])
-            
-            # Simple heuristic: if image is very red or has low brightness, might be abnormal
-            brightness = (avg_red + avg_green + avg_blue) / 3
-            redness_ratio = avg_red / (avg_green + avg_blue + 1)
-            
-            if redness_ratio > 1.2 or brightness < 100:
-                return "Abnormal(Ulcer)", 0.65
-            else:
-                return "Normal(Healthy skin)", 0.70
-        else:
-            # Grayscale image
-            avg_brightness = np.mean(img_array)
-            if avg_brightness < 120:
-                return "Abnormal(Ulcer)", 0.60
-            else:
-                return "Normal(Healthy skin)", 0.75
+            print(f"❌ Real CNN prediction error: {e}")
+            raise Exception(f"Real CNN model prediction failed: {e}")
     
     def _load_skin_conditions(self) -> Dict:
         """
@@ -149,26 +181,6 @@ class SkinConditionPredictor:
                 "treatment_options": ["immediate_medical_care", "wound_management", "infection_control"],
                 "urgency": "high"
             },
-            "Acne": {
-                "description": "A skin condition that occurs when hair follicles become plugged with oil and dead skin cells",
-                "common_locations": ["face", "chest", "back", "shoulders"],
-                "visual_characteristics": ["pimples", "blackheads", "whiteheads", "cysts"],
-                "symptoms": ["skin_rash", "pus_filled_pimples", "blackheads", "inflammation"],
-                "severity_levels": ["mild", "moderate", "severe"],
-                "age_groups": ["teenagers", "young_adults"],
-                "treatment_options": ["consult_dermatologist", "gentle_skincare", "avoid_picking"],
-                "urgency": "low"
-            },
-            "Eczema": {
-                "description": "A condition that makes skin red and itchy, commonly in children but can occur at any age",
-                "common_locations": ["hands", "feet", "ankles", "wrists", "neck", "face"],
-                "visual_characteristics": ["red_patches", "dry_skin", "scaling", "thickened_skin"],
-                "symptoms": ["itching", "skin_rash", "dry_skin", "inflammation"],
-                "severity_levels": ["mild", "moderate", "severe"],
-                "age_groups": ["children", "adults"],
-                "treatment_options": ["consult_dermatologist", "moisturize_regularly", "avoid_triggers"],
-                "urgency": "low"
-            },
             "Normal_Skin": {
                 "description": "Healthy skin with no visible abnormalities or concerning features",
                 "common_locations": ["any_skin_area"],
@@ -181,10 +193,10 @@ class SkinConditionPredictor:
             }
         }
 
-# Main function that will be called from the healthcare API
+# Main function that integrates with app_streamlit.py
 def predict_skin_disease(img_pil):
     """
-    Main prediction function that integrates with app_streamlit.py AI chain.
+    Main prediction function that integrates with app_streamlit.py AI chain using REAL CNN model.
     This function is called from the Analyze Medical Images page.
     
     Args:
@@ -194,70 +206,44 @@ def predict_skin_disease(img_pil):
         Tuple containing:
         - predicted_class: str (e.g., "Abnormal(Ulcer)", "Normal(Healthy skin)")
         - confidence: float (0.0 to 1.0)
-        - ai_response: str (AI doctor response from app_streamlit.py)
+        - ai_response: str (AI doctor response from app_streamlit.py using get_skin_image_summary_template)
     """
     try:
-        print("🔬 Starting predict_skin_disease function...")
+        print("🚀 Starting predict_skin_disease function with REAL CNN model...")
         
-        # Initialize predictor
+        # Initialize predictor with REAL CNN model
         predictor = SkinConditionPredictor()
         
-        # Get prediction from CNN model or rules
+        # Get prediction from REAL CNN model
         predicted_class, confidence = predictor.predict_skin_disease(img_pil)
         
-        print(f"📊 Prediction: {predicted_class} with confidence {confidence:.1%}")
+        print(f"📊 Real CNN Prediction: {predicted_class} with confidence {confidence:.1%}")
         
-        # Import typhoon_wrapper and AI chain functions from app_streamlit
+        # Import required functions from app_streamlit.py
         try:
+            print("🔗 Importing functions from app_streamlit.py...")
             from app_streamlit import ai_chain_skin_doctor_reply, format_ai3_bullet, typhoon_wrapper
             
-            print("🤖 Calling ai_chain_skin_doctor_reply from app_streamlit.py...")
+            print("🤖 Calling ai_chain_skin_doctor_reply with get_skin_image_summary_template...")
             
             # Call the AI chain function from app_streamlit.py
+            # This will use get_skin_image_summary_template from health_prompt_template.py
             skin_ai3_reply = ai_chain_skin_doctor_reply(predicted_class, confidence, typhoon_wrapper)
             
-            # Format the response
+            # Format the response using format_ai3_bullet
             skin_ai3_reply = format_ai3_bullet(skin_ai3_reply)
             
-            print("✅ AI response generated successfully")
+            print("✅ AI response generated successfully using get_skin_image_summary_template")
             
             return predicted_class, confidence, skin_ai3_reply
             
         except ImportError as e:
-            print(f"⚠️ Could not import from app_streamlit.py: {e}")
-            # Fallback response
-            fallback_response = generate_fallback_response(predicted_class, confidence)
-            return predicted_class, confidence, fallback_response
+            print(f"❌ Could not import from app_streamlit.py: {e}")
+            raise Exception(f"app_streamlit.py integration failed: {e}")
             
     except Exception as e:
         print(f"❌ Error in predict_skin_disease: {e}")
-        # Return safe defaults
-        return "Normal(Healthy skin)", 0.5, "การวิเคราะห์ภาพเสร็จสิ้น กรุณาปรึกษาแพทย์เพื่อการวินิจฉัยที่แม่นยำ"
-
-def generate_fallback_response(predicted_class: str, confidence: float) -> str:
-    """
-    Generate fallback response when app_streamlit.py is not available.
-    """
-    if predicted_class == "Abnormal(Ulcer)":
-        return f"""ขอให้คุณอย่ากังวลมากนะคะ จากการวิเคราะห์ภาพพบความผิดปกติที่อาจต้องได้รับการดูแล
-
-• 🩹 ทำความสะอาดบริเวณที่มีแผลด้วยน้ำสะอาดและสบู่อ่อนโยน
-• 💧 ดื่มน้ำให้เพียงพอและรักษาความชุ่มชื้นของผิวหนัง  
-• 🛡️ หลีกเลี่ยงการขูดขีดหรือกดบริเวณที่ผิดปกติ
-• 🩺 ควรพบแพทย์ผิวหนังเพื่อรับการตรวจวินิจฉัยที่ถูกต้อง
-• ⚠️ หากมีอาการปวด บวม หรือมีหนองควรรีบพบแพทย์ทันที
-
-ความมั่นใจในการวิเคราะห์: {confidence:.1%}"""
-    else:
-        return f"""ดีใจด้วยนะคะ จากการวิเคราะห์ภาพผิวหนังดูปกติดี
-
-• ✨ ดูแลรักษาความสะอาดของผิวหนังต่อไป
-• 💧 ใช้ครีมบำรุงผิวเพื่อรักษาความชุ่มชื้น
-• ☀️ ป้องกันผิวจากแสงแดดด้วยครีมกันแดด
-• 🔍 ตรวจสอบผิวหนังเป็นประจำเพื่อสังเกตการเปลี่ยนแปลง
-• 🩺 หากสังเกตเห็นการเปลี่ยนแปลงผิดปกติควรปรึกษาแพทย์
-
-ความมั่นใจในการวิเคราะห์: {confidence:.1%}"""
+        raise Exception(f"predict_skin_disease failed: {e}")
 
 # Example usage and testing
 if __name__ == "__main__":
@@ -266,16 +252,18 @@ if __name__ == "__main__":
     
     # Test with a sample image
     try:
+        print("🧪 Testing predict_skin_disease with real CNN model...")
+        
         # Create a test image
         test_image = Image.new('RGB', (224, 224), color='red')
         
         # Test the prediction function
         predicted_class, confidence, ai_response = predict_skin_disease(test_image)
         
-        print(f"Test Result:")
+        print(f"✅ Test Result:")
         print(f"Predicted Class: {predicted_class}")
         print(f"Confidence: {confidence:.1%}")
         print(f"AI Response: {ai_response}")
         
     except Exception as e:
-        print(f"Test failed: {e}")
+        print(f"❌ Test failed: {e}")
