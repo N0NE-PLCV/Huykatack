@@ -257,6 +257,15 @@ export const P = (): JSX.Element => {
           onLanguageChange={handleLanguageChange}
         />
 
+        {/* Brand Image - Top Right Below Nav */}
+        <div className="absolute top-20 sm:top-24 right-4 sm:right-6 lg:right-8 z-10">
+          <img 
+            src="/black_circle_360x360.png" 
+            alt="Powered by Bolt" 
+            className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 xl:w-32 xl:h-32 opacity-80 hover:opacity-100 transition-opacity duration-300"
+          />
+        </div>
+
         {/* Main Content - Fully Responsive */}
         <section className="flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 py-8 sm:py-12 md:py-16 lg:py-24 min-h-[calc(100vh-75px)]">
           {/* Headings - Responsive typography */}
